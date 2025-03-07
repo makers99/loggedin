@@ -37,6 +37,9 @@ class Loggedin_Admin {
 		// Show review request.
 		add_action( 'admin_notices', array( $this, 'review_notice' ) );
 		add_action( 'admin_init', array( $this, 'review_action' ) );
+
+		// Add inline JavaScript for options page.
+		add_action( 'admin_footer', array( $this, 'admin_footer_js' ) );
 	}
 
 	/**
@@ -70,7 +73,7 @@ class Loggedin_Admin {
 					'general',
 					'settings_updated', // Override the settings update message.
 					sprintf(
-					// translators: %s User name of the logging out user.
+						// translators: %s User name of the logging out user.
 						__( 'User %s forcefully logged out from all devices.', 'loggedin' ),
 						$user->user_login
 					),
@@ -114,6 +117,8 @@ class Loggedin_Admin {
 		register_setting( 'general', 'loggedin_maximum' );
 		// Register logic settings.
 		register_setting( 'general', 'loggedin_logic' );
+		// Register option for logging out only the oldest session.
+		register_setting( 'general', 'logout_oldest_session' );
 
 		// Add new setting filed to set the limit.
 		add_settings_field(
@@ -173,12 +178,20 @@ class Loggedin_Admin {
 	 */
 	public function loggedin_logic() {
 		// Get settings value.
-		$value = get_option( 'loggedin_logic', 'allow' );
+		$logic = get_option( 'loggedin_logic', 'allow' );
+		// Get setting value for logout oldest session checkbox.
+		$logout_oldest = get_option( 'logout_oldest_session', false );
 
-		echo '<input type="radio" name="loggedin_logic" value="allow" ' . checked( $value, 'allow', false ) . '/> ' . esc_html__( 'Allow', 'loggedin' );
-		echo ' <input type="radio" name="loggedin_logic" value="block" ' . checked( $value, 'block', false ) . '/> ' . esc_html__( 'Block', 'loggedin' );
+		// Output the radio buttons.
+		echo '<label><input type="radio" name="loggedin_logic" value="allow" ' . checked( $logic, 'allow', false ) . '/> ' . esc_html__( 'Allow', 'loggedin' ) . '</label> ';
+		echo '<label><input type="radio" name="loggedin_logic" value="block" ' . checked( $logic, 'block', false ) . '/> ' . esc_html__( 'Block', 'loggedin' ) . '</label>';
+
+		// Output the descriptions.
 		echo '<p class="description"><strong>' . esc_html__( 'Allow:', 'loggedin' ) . '</strong> ' . esc_html__( 'Allow new login by terminating all other old sessions when the limit is reached.', 'loggedin' ) . '</p>';
-		echo '<p class="description"><strong>' . esc_html__( 'Block:', 'loggedin' ) . '</strong> ' . esc_html__( ' Do not allow new login if the limit is reached. Users need to wait for the old login sessions to expire.', 'loggedin' ) . '</p>';
+		echo '<p class="description"><strong>' . esc_html__( 'Block:', 'loggedin' ) . '</strong> ' . esc_html__( 'Do not allow new login if the limit is reached. Users need to wait for the old login sessions to expire.', 'loggedin' ) . '</p>';
+		
+		echo '<br><label for="logout_oldest_session"><input type="checkbox" id="logout_oldest_session" name="logout_oldest_session" value="1" ' . checked( $logout_oldest, true, false ) . '/> ' . esc_html__( 'Log out the oldest session instead of logging out all sessions.', 'loggedin' ) . '</label>';
+
 	}
 
 	/**
@@ -197,8 +210,40 @@ class Loggedin_Admin {
 	}
 
 	/**
-	 * Show admin to ask for review in wp.org.
+	 * Output inline JavaScript to disable and gray out the integrated "logout oldest session" checkbox
+	 * when the "Allow" radio option is not selected.
 	 *
+	 * @since 1.3.2
+	 * @access public
+	 * @return void
+	 */
+	public function admin_footer_js() {
+		// Only output on the General Settings page.
+		$screen = get_current_screen();
+		if ( $screen && 'options-general' === $screen->id ) {
+			?>
+			<script>
+			jQuery(document).ready(function($) {
+				function toggleOldestCheckbox() {
+					if ($('input[name="loggedin_logic"]:checked').val() !== 'allow') {
+						$('#logout_oldest_session').prop('disabled', true);
+						$('label[for="logout_oldest_session"]').css('color', '#aaa');
+					} else {
+						$('#logout_oldest_session').prop('disabled', false);
+						$('label[for="logout_oldest_session"]').css('color', '');
+					}
+				}
+				toggleOldestCheckbox();
+				$('input[name="loggedin_logic"]').change(toggleOldestCheckbox);
+			});
+			</script>
+			<?php
+		}
+	}
+
+
+	 /**
+	 * Show admin to ask for review in wp.org.
 	 * Show admin notice only inside our plugin's settings page.
 	 * Hide the notice permanently if user dismissed it.
 	 *
@@ -238,7 +283,7 @@ class Loggedin_Admin {
 					<p>
 						<?php
 						printf(
-						// translators: %1$s Current user's name. %2$s <strong> %3$s </strong>.
+							// translators: %1$s Current user's name. %2$s <strong> %3$s </strong>.
 							__( 'Hey %1$s, I noticed you\'ve been using %2$sLoggedin%3$s plugin for more than 1 week – that’s awesome! Could you please do me a BIG favor and give it a 5-star rating on WordPress? Just to help us spread the word and boost our motivation.', 'loggedin' ),
 							empty( $current_user->display_name ) ? esc_html__( 'there', 'loggedin' ) : esc_attr( ucwords( $current_user->display_name ) ),
 							'<strong>',

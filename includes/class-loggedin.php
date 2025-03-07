@@ -63,10 +63,11 @@ class Loggedin {
 		if ( 'allow' === get_option( 'loggedin_logic', 'allow' ) ) {
 			// Check if limit exceed.
 			if ( $this->reached_limit( $user_id ) ) {
-				// Sessions token instance.
-				$manager = WP_Session_Tokens::get_instance( $user_id );
-				// Destroy all others.
-				$manager->destroy_all();
+				if ( get_option( 'logout_oldest_session', false ) ) {
+					$this->logout_oldest_session( $user_id );
+				} else {
+					$this->logout_all_sessions( $user_id );
+				}
 			}
 		}
 
@@ -102,6 +103,56 @@ class Loggedin {
 		}
 
 		return $user;
+	}
+
+	/**
+	 * Log out all sessions for the user.
+	 *
+	 * @param int $user_id User ID.
+	 *
+	 * @since 1.3.2
+	 * @access private
+	 *
+	 * @return void
+	 */
+	private function logout_all_sessions( $user_id ) {
+		$manager = WP_Session_Tokens::get_instance( $user_id );
+		$manager->destroy_all();
+	}
+
+	/**
+	 * Log out only the oldest session for the user.
+	 *
+	 * This function retrieves the raw session tokens directly from user meta,
+	 * identifies the oldest session by its login timestamp, and removes it.
+	 *
+	 * @param int $user_id User ID.
+	 *
+	 * @since 1.3.2
+	 * @access private
+	 *
+	 * @return void
+	 */
+	private function logout_oldest_session( $user_id ) {
+		// Retrieve the raw sessions array directly from user meta.
+		$sessions = get_user_meta( $user_id, 'session_tokens', true );
+		if ( ! is_array( $sessions ) || empty( $sessions ) ) {
+			return;
+		}
+		$oldest_token = '';
+		$oldest_time  = PHP_INT_MAX;
+		// Loop through sessions to find the oldest one.
+		foreach ( $sessions as $token => $session ) {
+			if ( isset( $session['login'] ) && $session['login'] < $oldest_time ) {
+				$oldest_time  = $session['login'];
+				$oldest_token = $token;
+			}
+		}
+		// Remove the oldest session directly.
+		if ( $oldest_token ) {
+			unset( $sessions[ $oldest_token ] );
+			update_user_meta( $user_id, 'session_tokens', $sessions );
+		}
 	}
 
 	/**
