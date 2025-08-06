@@ -20,7 +20,7 @@ defined( 'WPINC' ) || die( 'Well, get lost.' );
  */
 class Loggedin {
 
-  private bool $add_notice_oldest_terminated = false;
+	private bool $add_notice_oldest_terminated = false;
 
 	/**
 	 * Initialize the class and set its properties.
@@ -38,8 +38,8 @@ class Loggedin {
 		// Use password check filter.
 		add_filter( 'check_password', array( $this, 'validate_allow_logic' ), 10, 4 );
 
-    // bridge hook to output the notice after redirect
-    add_action( 'wp_login', array( $this, 'maybe_show_wc_notice' ) );
+		// Output user notice if max amount of logins exceeded.
+		add_action( 'wp_login', array( $this, 'maybe_show_wc_notice' ) );
 	}
 
 	/**
@@ -158,7 +158,7 @@ class Loggedin {
 			unset( $sessions[ $oldest_token ] );
 			update_user_meta( $user_id, 'session_tokens', $sessions );
 
-      $this->add_notice_oldest_terminated = true;
+			$this->add_notice_oldest_terminated = true;
 		}
 	}
 
@@ -254,18 +254,19 @@ class Loggedin {
 	}
 
 
-  /**
-   * Show the WC notice on the first front-end request after login redirect.
-   */
-  public function maybe_show_wc_notice() {
-    if ( $this->add_notice_oldest_terminated && function_exists( 'wc_add_notice' ) ) {
-      // We need to manually set the customer session cookie because WooCommerce does that at beginning of the request.
-      WC()->session->set_customer_session_cookie( true );
-      wc_add_notice(
-        __( 'The maximum number of active sessions for your account has been exceeded. Therefore, your oldest session has been terminated.', 'loggedin' ),
-        'notice'
-      );
-    }
-  }
+	/**
+	 * Output a notice if user exceeded maximum amount of logins.
+	 */
+	public function maybe_show_wc_notice() {
+		if ( $this->add_notice_oldest_terminated && function_exists( 'wc_add_notice' ) ) {
+			// We need to manually set the customer session cookie
+			// because WooCommerce only sets it at the beginning of the request.
+			WC()->session->set_customer_session_cookie( true );
+			wc_add_notice(
+				__( 'The maximum number of active sessions for your account has been exceeded. Therefore, your oldest session has been terminated.', 'loggedin' ),
+				'notice'
+			);
+		}
+	}
 
 }
